@@ -1,12 +1,12 @@
-# Solving for Controller Feedback of Dynamical Systems Using Reinforcement Learning
-
+# Solving for Controller Feedback of Dynamical Systems Using Reinforcement Learning 
+## (Full report in Ethan_Crouse-Layman.pdf
 **Author**: Ethan D. Crouse  
 **Supervisor**: Dr. Steffen W. R. Werner  
 **Date**: May 5, 2025  
 
 ## Overview
 
-This project demonstrates how reinforcement learning can be used to compute feedback control for stabilizing unstable linear dynamical systems. Specifically, the method trains a neural network controller using reinforcement learning on a reduced version of the system's dynamics—derived from its unstable eigenspace.
+This project demonstrates how reinforcement learning can be used to compute feedback control for stabilizing unstable linear dynamical systems. Specifically, the method trains a neural network controller using reinforcement learning on a reduced version of the system's dynamics, derived from its unstable eigenspace.
 
 By leveraging Dr. Werner’s insight that the unstable eigenspace alone determines stability, we reduce computation and training time drastically while still achieving robust control performance on the full system.
 
