@@ -1,0 +1,136 @@
+%LEARNFEEDBACK_DT Use Deep Deterministic Policy Gradient to learn K.
+
+%
+% This file is part of the archive Code, Data and Results for Numerical
+% Experiments in "Context-aware inference for stabilizing dynamical systems
+% from scarce data"
+% Copyright (C) 2023 Steffen W. R. Werner
+% All rights reserved.
+% License: BSD 2-Clause License (see COPYING)
+%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% INPUT ARGUMENT.                                                       %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Get benchmark parameters.
+run('set_param.m');
+
+% Name for savefiles.
+savename = ['results_learnfb_train'];
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% INITIALIZATION.                                                       %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Observer/action specifications.
+obsSpec = rlNumericSpec([nhat, 1]);
+actSpec = rlNumericSpec([mhat, 1]);
+
+
+
+
+% Create training environment.
+StepHandle  = @(Action, LoggedSignals) stepFcn(Action, LoggedSignals, ...
+    fdtHat, rluLambda, rldLambda);
+ResetHandle = @() resetFcn(nhat, rlxLambda);
+env         = rlFunctionEnv(obsSpec, actSpec, StepHandle, ResetHandle);
+
+% Q-function-network.
+StatesPath = [imageInputLayer([nhat, 1, 1], ...
+    'Normalization', 'none', 'Name', 'States'), ...
+    resize2dLayer('OutputSize', [max(floor(nhat / 10), 500), 1], ...
+    'Method', 'bilinear', 'Name', 'FC')];
+ControlsPath = imageInputLayer([mhat, 1, 1], ...
+    'Normalization', 'none', 'Name', 'Controls');
+
+CommonPaths = [ ...
+    concatenationLayer(1, 2, 'Name', 'Concatenation'), ...
+    fullyConnectedLayer(32, 'Name', 'FC200'), ...
+    reluLayer('Name', 'ReLU'), ...
+    fullyConnectedLayer(1, 'Name', 'CostValue') ...
+    ];
+
+netQVal = layerGraph(StatesPath);
+netQVal = addLayers(netQVal, ControlsPath);
+netQVal = addLayers(netQVal, CommonPaths);
+
+netQVal = connectLayers(netQVal, 'FC', 'Concatenation/in1');
+netQVal = connectLayers(netQVal, 'Controls', 'Concatenation/in2');
+
+% Actor network.
+netAct = layerGraph();
+
+% Input layer (size n)
+netAct = addLayers(netAct, imageInputLayer([nhat, 1, 1], ...
+    'Normalization', 'none', 'Name', 'States'));
+
+
+% Fully connected layer with 200 neurons
+%netAct = addLayers(netAct, fullyConnectedLayer(10, 'Name', '200fc1'));
+%netAct = addLayers(netAct, fullyConnectedLayer(10, 'Name', '200fc2'));
+netAct = addLayers(netAct, fullyConnectedLayer(10, 'Name', '200fc3'));
+
+%netAct = addLayers(netAct, tanhLayer('Name', 'tanh1'));
+%netAct = addLayers(netAct, tanhLayer('Name', 'relu1'));
+netAct = addLayers(netAct, reluLayer('Name', 'tanh2'));
+
+% Fully connected layer (outputs size m)
+netAct = addLayers(netAct, fullyConnectedLayer(mhat, 'Name', 'Controls', ...
+    'BiasLearnRateFactor', 0, 'Bias', bias));
+
+% Connect the layers
+netAct = connectLayers(netAct, 'States', '200fc3');
+%netAct = connectLayers(netAct, '200fc1', 'tanh1');
+%netAct = connectLayers(netAct, 'tanh1', '200fc2');
+%netAct = connectLayers(netAct, '200fc2', 'relu1');
+%netAct = connectLayers(netAct, 'relu1', '200fc3');
+netAct = connectLayers(netAct, '200fc3', 'tanh2');
+netAct = connectLayers(netAct, 'tanh2', 'Controls');
+
+% Create critics and actor representations.
+critic = rlQValueRepresentation(netQVal, obsSpec, actSpec, ...
+    'Observation', {'States'}, 'Action', {'Controls'});
+actor  = rlDeterministicActorRepresentation(netAct, obsSpec, actSpec, ...
+    'Observation', {'States'}, 'Action', {'Controls'});
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LEARNING PARAMETERS.                                                  %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Slower updates of critic.
+criticOptions = rlOptimizerOptions('LearnRate', 1.0e-05, ...
+    'GradientThreshold', 1.0e+02);
+
+% Slower updates of actor.
+actorOptions = rlOptimizerOptions('LearnRate', 1.0e-03, ...
+    'GradientThreshold', 1.0e+02);
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CREATE LEARNING AGENT.                                                %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+DDPGAgent = rlDDPGAgent(actor, critic);
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% TRAIN AGENT.                                                          %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+trainOpts = rlTrainingOptions(...
+    'MaxEpisodes'         , rlEpisodes, ...
+    'MaxStepsPerEpisode'  , rlTimeSteps, ...
+    'Verbose'             , 1, ...
+    'Plots'               , 'none', ...
+    'StopTrainingCriteria','EpisodeReward', ...
+    'StopTrainingValue'   , 0);
+
+fprintf(1, '\n');
+trainStats = train(DDPGAgent, env, trainOpts);
+fprintf(1, '\n');
+
+
