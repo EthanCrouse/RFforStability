@@ -1,5 +1,5 @@
 # Solving for Controller Feedback of Dynamical Systems Using Reinforcement Learning 
-### (Full report in Ethan_Crouse-Layman.pdf)
+### (Full report in Ethan Crouse - Layman.pdf)
 **Author**: Ethan D. Crouse  
 **Supervisor**: Dr. Steffen W. R. Werner  
 **Date**: May 5, 2025  
